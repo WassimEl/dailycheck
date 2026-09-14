@@ -57,6 +57,46 @@
   --sage-dim: #6b444a;
 }
 
+[data-theme="mauve"] {
+  --bg: #16121b;
+  --bg-raised: #1e1824;
+  --line: #332a3d;
+  --sage: #9b7fb0;
+  --sage-dim: #5c4b6a;
+}
+
+[data-theme="jaune"] {
+  --bg: #191610;
+  --bg-raised: #211d15;
+  --line: #3a3323;
+  --sage: #d4b24a;
+  --sage-dim: #7d6a2c;
+}
+
+[data-theme="bleu"] {
+  --bg: #10141c;
+  --bg-raised: #161c26;
+  --line: #2a3342;
+  --sage: #5b8fc9;
+  --sage-dim: #365478;
+}
+
+[data-theme="corail"] {
+  --bg: #1a1310;
+  --bg-raised: #221a15;
+  --line: #3d2c22;
+  --sage: #c97a5b;
+  --sage-dim: #794936;
+}
+
+[data-theme="gris"] {
+  --bg: #171716;
+  --bg-raised: #1e1e1c;
+  --line: #34342f;
+  --sage: #9a9a92;
+  --sage-dim: #5c5c56;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -690,12 +730,13 @@ body.no-anim, body.no-anim * {
 
 .theme-grid {
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .theme-swatch {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   border: 2px solid transparent;
   cursor: pointer;
@@ -704,6 +745,69 @@ body.no-anim, body.no-anim * {
 
 .theme-swatch.is-active {
   border-color: var(--text);
+}
+
+.cat-manage {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cat-manage__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.cat-manage__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cat-manage__row.is-hidden .cat-manage__label {
+  color: var(--text-dim);
+  text-decoration: line-through;
+  text-decoration-color: var(--line);
+}
+
+.cat-manage__btn {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: none;
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.cat-manage__btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.cat-manage__btn:not(:disabled):hover {
+  border-color: var(--sage);
+}
+
+.cat-manage__btn.is-off {
+  opacity: 0.45;
+}
+
+.modal__note {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  margin: 10px 0 0;
 }
 
 .toggle-row {
@@ -887,6 +991,11 @@ body.no-anim, body.no-anim * {
         <button class="theme-swatch" data-theme="nuit" style="background:#7691b5" aria-label="Nuit bleutée"></button>
         <button class="theme-swatch" data-theme="foret" style="background:#7fa06a" aria-label="Forêt"></button>
         <button class="theme-swatch" data-theme="bordeaux" style="background:#b06a72" aria-label="Bordeaux"></button>
+        <button class="theme-swatch" data-theme="mauve" style="background:#9b7fb0" aria-label="Mauve"></button>
+        <button class="theme-swatch" data-theme="jaune" style="background:#d4b24a" aria-label="Jaune"></button>
+        <button class="theme-swatch" data-theme="bleu" style="background:#5b8fc9" aria-label="Bleu classique"></button>
+        <button class="theme-swatch" data-theme="corail" style="background:#c97a5b" aria-label="Corail"></button>
+        <button class="theme-swatch" data-theme="gris" style="background:#9a9a92" aria-label="Gris neutre"></button>
       </div>
     </div>
 
@@ -897,6 +1006,23 @@ body.no-anim, body.no-anim * {
         <span class="switch__track"></span>
         <span class="switch__thumb"></span>
       </label>
+    </div>
+
+    <div class="modal__section">
+      <div class="toggle-row">
+        <span class="modal__label">Rappel en soirée (20h)</span>
+        <label class="switch">
+          <input type="checkbox" id="reminderToggle">
+          <span class="switch__track"></span>
+          <span class="switch__thumb"></span>
+        </label>
+      </div>
+      <p class="modal__note">Ne fonctionne que si l'app est ouverte (même en arrière-plan). Une vraie notification app fermée demanderait un serveur.</p>
+    </div>
+
+    <div class="modal__section">
+      <span class="modal__label">Catégories (ordre et visibilité)</span>
+      <div class="cat-manage" id="catManageList"></div>
     </div>
 
     <button class="modal__close" id="closeSettings">Fermer</button>
@@ -933,6 +1059,11 @@ const CHECKLIST_CATEGORIES = [
       { id: "petit-dej", text: "Petit-déjeuner équilibré" },
       { id: "fruits-legumes", text: "Au moins une portion de fruits ou légumes" },
       { id: "pas-grignotage", text: "Pas de grignotage sucré / ultra-transformé" },
+      {
+        id: "repas-sans-ecran",
+        text: "Un repas sans écran",
+        info: "Manger en pleine conscience, sans téléphone ni télé, au moins une fois dans la journée.",
+      },
       {
         id: "pas-excitants-soir",
         text: "Pas de café ni d'alcool en soirée",
@@ -1017,7 +1148,6 @@ const CHECKLIST_CATEGORIES = [
   const STORAGE_CURRENT = "rituel_current_v1";
   const STORAGE_SETTINGS = "rituel_settings_v1";
 
-  const TOTAL_ITEMS = CHECKLIST_CATEGORIES.reduce((n, c) => n + c.items.length, 0);
   const PIE_COLORS = ["#7a8c6f", "#d8a24a", "#6f87ae", "#b06a72", "#5f9b95", "#9a9a5f", "#8f6f9b"];
 
   // ---------- Utils ----------
@@ -1062,7 +1192,29 @@ const CHECKLIST_CATEGORIES = [
 
   let history = readJSON(STORAGE_HISTORY, {});
   let current = readJSON(STORAGE_CURRENT, null);
-  let settings = readJSON(STORAGE_SETTINGS, { theme: "default", animations: true });
+  let settings = readJSON(STORAGE_SETTINGS, {
+    theme: "default",
+    animations: true,
+    eveningReminder: false,
+    categoryOrder: null,
+    hiddenCategories: [],
+  });
+  if (!settings.categoryOrder || settings.categoryOrder.length !== CHECKLIST_CATEGORIES.length) {
+    settings.categoryOrder = CHECKLIST_CATEGORIES.map((c) => c.id);
+  }
+  if (!settings.hiddenCategories) settings.hiddenCategories = [];
+
+  function getVisibleCategories() {
+    return settings.categoryOrder
+      .map((id) => CHECKLIST_CATEGORIES.find((c) => c.id === id))
+      .filter(Boolean)
+      .filter((c) => !settings.hiddenCategories.includes(c.id));
+  }
+
+  function getTotalItems() {
+    const n = getVisibleCategories().reduce((sum, c) => sum + c.items.length, 0);
+    return n || 1; // évite une division par zéro si tout est masqué
+  }
 
   function ensureFreshDay() {
     const key = todayKey();
@@ -1071,7 +1223,7 @@ const CHECKLIST_CATEGORIES = [
         const done = Object.keys(current.checked || {}).length;
         history[current.date] = {
           checked: current.checked || {},
-          total: TOTAL_ITEMS,
+          total: getTotalItems(),
           done,
           water: current.water || 0,
         };
@@ -1089,7 +1241,7 @@ const CHECKLIST_CATEGORIES = [
     const done = Object.keys(current.checked).length;
     history[current.date] = {
       checked: current.checked,
-      total: TOTAL_ITEMS,
+      total: getTotalItems(),
       done,
       water: current.water || 0,
       savedAt: current.savedAt,
@@ -1140,6 +1292,130 @@ const CHECKLIST_CATEGORIES = [
       writeJSON(STORAGE_SETTINGS, settings);
       applySettings();
     });
+
+    const reminderToggle = document.getElementById("reminderToggle");
+    reminderToggle.checked = settings.eveningReminder;
+    reminderToggle.addEventListener("change", async () => {
+      if (reminderToggle.checked && "Notification" in window) {
+        const perm = await Notification.requestPermission();
+        if (perm !== "granted") {
+          reminderToggle.checked = false;
+          showToast("Notifications refusées par le navigateur");
+          return;
+        }
+      }
+      settings.eveningReminder = reminderToggle.checked;
+      writeJSON(STORAGE_SETTINGS, settings);
+    });
+
+    renderCategoryManager();
+  }
+
+  function renderCategoryManager() {
+    const list = document.getElementById("catManageList");
+    list.innerHTML = "";
+
+    settings.categoryOrder.forEach((id, index) => {
+      const cat = CHECKLIST_CATEGORIES.find((c) => c.id === id);
+      if (!cat) return;
+      const hidden = settings.hiddenCategories.includes(id);
+
+      const row = document.createElement("div");
+      row.className = "cat-manage__row" + (hidden ? " is-hidden" : "");
+
+      const up = document.createElement("button");
+      up.type = "button";
+      up.className = "cat-manage__btn";
+      up.textContent = "▲";
+      up.disabled = index === 0;
+      up.addEventListener("click", () => moveCategory(index, -1));
+
+      const down = document.createElement("button");
+      down.type = "button";
+      down.className = "cat-manage__btn";
+      down.textContent = "▼";
+      down.disabled = index === settings.categoryOrder.length - 1;
+      down.addEventListener("click", () => moveCategory(index, 1));
+
+      const label = document.createElement("span");
+      label.className = "cat-manage__label";
+      label.textContent = cat.label;
+
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "cat-manage__btn" + (hidden ? " is-off" : "");
+      toggle.textContent = hidden ? "🚫" : "👁";
+      toggle.setAttribute("aria-label", hidden ? "Réafficher" : "Masquer");
+      toggle.addEventListener("click", () => toggleCategory(id));
+
+      row.appendChild(up);
+      row.appendChild(down);
+      row.appendChild(label);
+      row.appendChild(toggle);
+      list.appendChild(row);
+    });
+  }
+
+  function moveCategory(index, direction) {
+    const target = index + direction;
+    if (target < 0 || target >= settings.categoryOrder.length) return;
+    const order = settings.categoryOrder;
+    [order[index], order[target]] = [order[target], order[index]];
+    writeJSON(STORAGE_SETTINGS, settings);
+    renderCategoryManager();
+    renderChecklist();
+    updateRing();
+    updateHero();
+  }
+
+  function toggleCategory(id) {
+    const hidden = settings.hiddenCategories;
+    const pos = hidden.indexOf(id);
+    if (pos === -1) hidden.push(id);
+    else hidden.splice(pos, 1);
+    writeJSON(STORAGE_SETTINGS, settings);
+    renderCategoryManager();
+    renderChecklist();
+    updateRing();
+    updateHero();
+  }
+
+  // ---------- Badge d'icône & rappel du soir ----------
+
+  function updateBadge() {
+    if (!("setAppBadge" in navigator)) return;
+    const remaining = getTotalItems() - todayCount();
+    try {
+      if (remaining > 0) navigator.setAppBadge(remaining).catch(() => {});
+      else navigator.clearAppBadge().catch(() => {});
+    } catch {
+      /* Badging API non supportée, on ignore silencieusement */
+    }
+  }
+
+  const STORAGE_REMINDER_SHOWN = "rituel_reminder_shown_v1";
+
+  async function maybeShowEveningReminder() {
+    if (!settings.eveningReminder) return;
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    const hour = new Date().getHours();
+    if (hour < 20) return;
+    if (todayPercent() >= 100) return;
+    if (localStorage.getItem(STORAGE_REMINDER_SHOWN) === todayKey()) return;
+
+    const remaining = getTotalItems() - todayCount();
+    const body = `Il te reste ${remaining} tâche${remaining > 1 ? "s" : ""} pour aujourd'hui.`;
+    try {
+      if ("serviceWorker" in navigator) {
+        const reg = await navigator.serviceWorker.ready;
+        reg.showNotification("Ta checklist du jour t'attend", { body });
+      } else {
+        new Notification("Ta checklist du jour t'attend", { body });
+      }
+      localStorage.setItem(STORAGE_REMINDER_SHOWN, todayKey());
+    } catch {
+      /* notification indisponible, on ignore */
+    }
   }
 
   // ---------- Rendering: checklist ----------
@@ -1296,7 +1572,17 @@ const CHECKLIST_CATEGORIES = [
     const root = document.getElementById("checklistRoot");
     root.innerHTML = "";
 
-    CHECKLIST_CATEGORIES.forEach((category) => {
+    const visible = getVisibleCategories();
+
+    if (visible.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "backup__text";
+      empty.textContent = "Toutes les catégories sont masquées — va dans Réglages pour en réafficher.";
+      root.appendChild(empty);
+      return;
+    }
+
+    visible.forEach((category) => {
       const section = document.createElement("section");
       section.className = "category";
 
@@ -1322,7 +1608,7 @@ const CHECKLIST_CATEGORIES = [
   }
 
   function todayPercent() {
-    return Math.round((todayCount() / TOTAL_ITEMS) * 100);
+    return Math.round((todayCount() / getTotalItems()) * 100);
   }
 
   function updateRing() {
@@ -1334,6 +1620,7 @@ const CHECKLIST_CATEGORIES = [
     fill.style.strokeDasharray = `${circumference}`;
     fill.style.strokeDashoffset = `${offset}`;
     label.textContent = `${pct}%`;
+    updateBadge();
   }
 
   const HERO_MESSAGES = [
@@ -1641,9 +1928,17 @@ const CHECKLIST_CATEGORIES = [
         }
         if (data.settings) {
           settings = { ...settings, ...data.settings };
+          if (!settings.categoryOrder || settings.categoryOrder.length !== CHECKLIST_CATEGORIES.length) {
+            settings.categoryOrder = CHECKLIST_CATEGORIES.map((c) => c.id);
+          }
+          if (!settings.hiddenCategories) settings.hiddenCategories = [];
           writeJSON(STORAGE_SETTINGS, settings);
           applySettings();
           refreshThemeButtons();
+          renderCategoryManager();
+          renderChecklist();
+          updateRing();
+          updateHero();
         }
         if (data.current && data.current.date === todayKey()) {
           current = data.current;
@@ -1675,6 +1970,7 @@ const CHECKLIST_CATEGORIES = [
     setupCalendarNav();
     setupBackup();
     setupSettings();
+    maybeShowEveningReminder();
 
     setInterval(() => {
       const before = current.date;
@@ -1685,6 +1981,7 @@ const CHECKLIST_CATEGORIES = [
         updateHero();
         updateDateLabel();
       }
+      maybeShowEveningReminder();
     }, 60 * 1000);
 
     if ("serviceWorker" in navigator) {
