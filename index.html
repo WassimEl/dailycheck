@@ -304,6 +304,38 @@ body.no-anim, body.no-anim * {
   padding: 4px 8px;
 }
 
+.add-item-row {
+  padding: 6px 0;
+}
+
+.add-item-btn {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  padding: 8px 0;
+  cursor: pointer;
+}
+
+.add-item-btn:hover {
+  color: var(--sage);
+}
+
+.add-item-input {
+  width: 100%;
+  background: var(--bg-raised);
+  border: 1px solid var(--sage);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  padding: 8px 10px;
+  margin: 4px 0;
+}
+
 .item-wrap {
   border-bottom: 1px solid var(--line);
 }
@@ -1206,7 +1238,7 @@ const CHECKLIST_CATEGORIES = [
   const STORAGE_SETTINGS = "rituel_settings_v1";
 
   const PIE_COLORS = ["#7a8c6f", "#d8a24a", "#6f87ae", "#b06a72", "#5f9b95", "#9a9a5f", "#8f6f9b"];
-  const APP_VERSION = "v6 · build 14/09/2026 18:55";
+  const APP_VERSION = "v7 · build 14/09/2026 19:54";
 
   // ---------- Utils ----------
 
@@ -1258,6 +1290,7 @@ const CHECKLIST_CATEGORIES = [
     hiddenCategories: [],
     hiddenItems: [],
     itemOverrides: {},
+    customItems: [],
     updatedAt: null,
   });
   if (!settings.categoryOrder || settings.categoryOrder.length !== CHECKLIST_CATEGORIES.length) {
@@ -1266,6 +1299,14 @@ const CHECKLIST_CATEGORIES = [
   if (!settings.hiddenCategories) settings.hiddenCategories = [];
   if (!settings.hiddenItems) settings.hiddenItems = [];
   if (!settings.itemOverrides) settings.itemOverrides = {};
+  if (!settings.customItems) settings.customItems = [];
+
+  function mergedItemsForCategory(cat) {
+    const custom = settings.customItems
+      .filter((ci) => ci.categoryId === cat.id)
+      .map((ci) => ({ id: ci.id, text: ci.text, custom: true }));
+    return cat.items.concat(custom);
+  }
 
   function saveSettings() {
     settings.updatedAt = Date.now();
@@ -1307,7 +1348,7 @@ const CHECKLIST_CATEGORIES = [
 
   function getTotalItems() {
     const n = getVisibleCategories().reduce(
-      (sum, c) => sum + c.items.filter((i) => !isItemHidden(i.id)).length,
+      (sum, c) => sum + mergedItemsForCategory(c).filter((i) => !isItemHidden(i.id)).length,
       0
     );
     return n || 1; // évite une division par zéro si tout est masqué
@@ -1316,7 +1357,7 @@ const CHECKLIST_CATEGORIES = [
   function getCountableItemIds() {
     const ids = new Set();
     getVisibleCategories().forEach((c) => {
-      c.items.forEach((i) => {
+      mergedItemsForCategory(c).forEach((i) => {
         if (!isItemHidden(i.id)) ids.add(i.id);
       });
     });
@@ -1584,13 +1625,25 @@ const CHECKLIST_CATEGORIES = [
       renameBtn.addEventListener("click", () => startRename(item, text));
       row.appendChild(renameBtn);
 
-      const hideBtn = document.createElement("button");
-      hideBtn.type = "button";
-      hideBtn.className = "info-btn";
-      hideBtn.textContent = isItemHidden(item.id) ? "🚫" : "👁";
-      hideBtn.setAttribute("aria-label", isItemHidden(item.id) ? "Réafficher" : "Masquer");
-      hideBtn.addEventListener("click", () => toggleItemHidden(item.id));
-      row.appendChild(hideBtn);
+      if (item.custom) {
+        const delBtn = document.createElement("button");
+        delBtn.type = "button";
+        delBtn.className = "info-btn";
+        delBtn.textContent = "🗑";
+        delBtn.setAttribute("aria-label", "Supprimer");
+        delBtn.addEventListener("click", () => {
+          if (confirm(`Supprimer « ${getItemLabel(item)} » ?`)) deleteCustomItem(item.id);
+        });
+        row.appendChild(delBtn);
+      } else {
+        const hideBtn = document.createElement("button");
+        hideBtn.type = "button";
+        hideBtn.className = "info-btn";
+        hideBtn.textContent = isItemHidden(item.id) ? "🚫" : "👁";
+        hideBtn.setAttribute("aria-label", isItemHidden(item.id) ? "Réafficher" : "Masquer");
+        hideBtn.addEventListener("click", () => toggleItemHidden(item.id));
+        row.appendChild(hideBtn);
+      }
     }
 
     wrap.appendChild(row);
@@ -1617,8 +1670,14 @@ const CHECKLIST_CATEGORIES = [
       if (committed) return;
       committed = true;
       const val = input.value.trim();
-      if (val && val !== item.text) settings.itemOverrides[item.id] = val;
-      else delete settings.itemOverrides[item.id];
+      if (item.custom) {
+        const entry = settings.customItems.find((ci) => ci.id === item.id);
+        if (entry && val) entry.text = val;
+      } else if (val && val !== item.text) {
+        settings.itemOverrides[item.id] = val;
+      } else {
+        delete settings.itemOverrides[item.id];
+      }
       saveSettings();
       renderChecklist();
       updateRing();
@@ -1642,6 +1701,65 @@ const CHECKLIST_CATEGORIES = [
     renderChecklist();
     updateRing();
     updateHero();
+  }
+
+  function deleteCustomItem(id) {
+    const idx = settings.customItems.findIndex((ci) => ci.id === id);
+    if (idx !== -1) settings.customItems.splice(idx, 1);
+    const hiddenIdx = settings.hiddenItems.indexOf(id);
+    if (hiddenIdx !== -1) settings.hiddenItems.splice(hiddenIdx, 1);
+    delete current.checked[id];
+    saveCurrent();
+    saveSettings();
+    renderChecklist();
+    updateRing();
+    updateHero();
+  }
+
+  function createAddItemRow(category) {
+    const row = document.createElement("div");
+    row.className = "add-item-row";
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "add-item-btn";
+    btn.textContent = "+ Ajouter un objectif";
+    row.appendChild(btn);
+
+    btn.addEventListener("click", () => {
+      row.innerHTML = "";
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "add-item-input";
+      input.placeholder = "Nouvel objectif...";
+      row.appendChild(input);
+      input.focus();
+
+      let done = false;
+      function commit() {
+        if (done) return;
+        done = true;
+        const val = input.value.trim();
+        if (val) {
+          const id = "custom-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+          settings.customItems.push({ id, categoryId: category.id, text: val });
+          saveSettings();
+        }
+        renderChecklist();
+        updateRing();
+        updateHero();
+      }
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") input.blur();
+        if (e.key === "Escape") {
+          done = true;
+          renderChecklist();
+        }
+      });
+      input.addEventListener("blur", commit);
+    });
+
+    return row;
   }
 
   function createWaterControls(item, checkboxEl) {
@@ -1748,8 +1866,9 @@ const CHECKLIST_CATEGORIES = [
     let anyRendered = false;
 
     visible.forEach((category) => {
-      const itemsToShow = category.items.filter((item) => editMode || !isItemHidden(item.id));
-      if (itemsToShow.length === 0) return;
+      const merged = mergedItemsForCategory(category);
+      const itemsToShow = merged.filter((item) => editMode || !isItemHidden(item.id));
+      if (!editMode && itemsToShow.length === 0) return;
       anyRendered = true;
 
       const section = document.createElement("section");
@@ -1766,6 +1885,10 @@ const CHECKLIST_CATEGORIES = [
       itemsToShow.forEach((item) => {
         list.appendChild(createItemElement(item));
       });
+
+      if (editMode) {
+        list.appendChild(createAddItemRow(category));
+      }
 
       section.appendChild(list);
       root.appendChild(section);
@@ -1936,7 +2059,7 @@ const CHECKLIST_CATEGORIES = [
     Object.values(history).forEach((entry) => {
       const checked = entry.checked || {};
       CHECKLIST_CATEGORIES.forEach((cat) => {
-        cat.items.forEach((item) => {
+        mergedItemsForCategory(cat).forEach((item) => {
           if (checked[item.id]) counts[cat.id]++;
         });
       });
@@ -2126,6 +2249,7 @@ const CHECKLIST_CATEGORIES = [
           if (!settings.hiddenCategories) settings.hiddenCategories = [];
           if (!settings.hiddenItems) settings.hiddenItems = [];
           if (!settings.itemOverrides) settings.itemOverrides = {};
+          if (!settings.customItems) settings.customItems = [];
           saveSettings();
           applySettings();
           refreshThemeButtons();
