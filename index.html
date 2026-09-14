@@ -17,6 +17,17 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
+<!-- OneSignal -->
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+<script>
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  OneSignalDeferred.push(async function (OneSignal) {
+    await OneSignal.init({
+      appId: "ac35d143-2b27-4e5a-8dd5-58d97cbc7ca0",
+    });
+  });
+</script>
+
 <style>
 :root {
   --bg: #171512;
@@ -1017,7 +1028,7 @@ body.no-anim, body.no-anim * {
           <span class="switch__thumb"></span>
         </label>
       </div>
-      <p class="modal__note">Ne fonctionne que si l'app est ouverte (même en arrière-plan). Une vraie notification app fermée demanderait un serveur.</p>
+      <p class="modal__note">Vraie notification, même app fermée (via OneSignal). Nécessite d'avoir configuré l'envoi automatique dans le dashboard OneSignal — voir README.</p>
     </div>
 
     <div class="modal__section">
@@ -1295,17 +1306,27 @@ const CHECKLIST_CATEGORIES = [
 
     const reminderToggle = document.getElementById("reminderToggle");
     reminderToggle.checked = settings.eveningReminder;
-    reminderToggle.addEventListener("change", async () => {
-      if (reminderToggle.checked && "Notification" in window) {
-        const perm = await Notification.requestPermission();
-        if (perm !== "granted") {
-          reminderToggle.checked = false;
-          showToast("Notifications refusées par le navigateur");
-          return;
-        }
-      }
-      settings.eveningReminder = reminderToggle.checked;
+    reminderToggle.addEventListener("change", () => {
+      const wantsReminder = reminderToggle.checked;
+      settings.eveningReminder = wantsReminder;
       writeJSON(STORAGE_SETTINGS, settings);
+
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      window.OneSignalDeferred.push(async function (OneSignal) {
+        if (wantsReminder) {
+          await OneSignal.Notifications.requestPermission();
+          if (!OneSignal.Notifications.permission) {
+            reminderToggle.checked = false;
+            settings.eveningReminder = false;
+            writeJSON(STORAGE_SETTINGS, settings);
+            showToast("Notifications refusées par le navigateur");
+            return;
+          }
+          showToast("Rappel activé");
+        }
+        OneSignal.User.addTag("reminder_opt_in", wantsReminder ? "true" : "false");
+        OneSignal.User.addTag("completed_today", todayPercent() >= 100 ? "true" : "false");
+      });
     });
 
     renderCategoryManager();
@@ -1380,7 +1401,7 @@ const CHECKLIST_CATEGORIES = [
     updateHero();
   }
 
-  // ---------- Badge d'icône & rappel du soir ----------
+  // ---------- Badge d'icône & synchro OneSignal ----------
 
   function updateBadge() {
     if (!("setAppBadge" in navigator)) return;
@@ -1393,29 +1414,12 @@ const CHECKLIST_CATEGORIES = [
     }
   }
 
-  const STORAGE_REMINDER_SHOWN = "rituel_reminder_shown_v1";
-
-  async function maybeShowEveningReminder() {
+  function syncOneSignalTag() {
     if (!settings.eveningReminder) return;
-    if (!("Notification" in window) || Notification.permission !== "granted") return;
-    const hour = new Date().getHours();
-    if (hour < 20) return;
-    if (todayPercent() >= 100) return;
-    if (localStorage.getItem(STORAGE_REMINDER_SHOWN) === todayKey()) return;
-
-    const remaining = getTotalItems() - todayCount();
-    const body = `Il te reste ${remaining} tâche${remaining > 1 ? "s" : ""} pour aujourd'hui.`;
-    try {
-      if ("serviceWorker" in navigator) {
-        const reg = await navigator.serviceWorker.ready;
-        reg.showNotification("Ta checklist du jour t'attend", { body });
-      } else {
-        new Notification("Ta checklist du jour t'attend", { body });
-      }
-      localStorage.setItem(STORAGE_REMINDER_SHOWN, todayKey());
-    } catch {
-      /* notification indisponible, on ignore */
-    }
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    window.OneSignalDeferred.push(function (OneSignal) {
+      OneSignal.User.addTag("completed_today", todayPercent() >= 100 ? "true" : "false");
+    });
   }
 
   // ---------- Rendering: checklist ----------
@@ -1621,6 +1625,7 @@ const CHECKLIST_CATEGORIES = [
     fill.style.strokeDashoffset = `${offset}`;
     label.textContent = `${pct}%`;
     updateBadge();
+    syncOneSignalTag();
   }
 
   const HERO_MESSAGES = [
@@ -1970,7 +1975,6 @@ const CHECKLIST_CATEGORIES = [
     setupCalendarNav();
     setupBackup();
     setupSettings();
-    maybeShowEveningReminder();
 
     setInterval(() => {
       const before = current.date;
@@ -1981,7 +1985,6 @@ const CHECKLIST_CATEGORIES = [
         updateHero();
         updateDateLabel();
       }
-      maybeShowEveningReminder();
     }, 60 * 1000);
 
     if ("serviceWorker" in navigator) {
