@@ -276,6 +276,34 @@ body.no-anim, body.no-anim * {
   flex-direction: column;
 }
 
+.list-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 14px;
+}
+
+.item-wrap.is-item-hidden {
+  opacity: 0.5;
+}
+
+.item-wrap.is-item-hidden .item__text {
+  color: var(--text-dim);
+  text-decoration: line-through;
+  text-decoration-color: var(--line);
+}
+
+.item__rename-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-raised);
+  border: 1px solid var(--sage);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  padding: 4px 8px;
+}
+
 .item-wrap {
   border-bottom: 1px solid var(--line);
 }
@@ -937,6 +965,9 @@ body.no-anim, body.no-anim * {
   </nav>
 
   <main id="viewToday" class="view">
+    <div class="list-toolbar">
+      <button class="btn btn--ghost" id="editModeBtn">✎ Modifier la liste</button>
+    </div>
     <div id="checklistRoot"></div>
   </main>
 
@@ -1035,6 +1066,8 @@ body.no-anim, body.no-anim * {
       <span class="modal__label">Catégories (ordre et visibilité)</span>
       <div class="cat-manage" id="catManageList"></div>
     </div>
+
+    <p class="modal__note" id="settingsUpdatedAt">Réglages jamais modifiés</p>
 
     <button class="modal__close" id="closeSettings">Fermer</button>
   </div>
@@ -1209,11 +1242,47 @@ const CHECKLIST_CATEGORIES = [
     eveningReminder: false,
     categoryOrder: null,
     hiddenCategories: [],
+    hiddenItems: [],
+    itemOverrides: {},
+    updatedAt: null,
   });
   if (!settings.categoryOrder || settings.categoryOrder.length !== CHECKLIST_CATEGORIES.length) {
     settings.categoryOrder = CHECKLIST_CATEGORIES.map((c) => c.id);
   }
   if (!settings.hiddenCategories) settings.hiddenCategories = [];
+  if (!settings.hiddenItems) settings.hiddenItems = [];
+  if (!settings.itemOverrides) settings.itemOverrides = {};
+
+  function saveSettings() {
+    settings.updatedAt = Date.now();
+    writeJSON(STORAGE_SETTINGS, settings);
+    refreshSettingsUpdatedLabel();
+  }
+
+  function refreshSettingsUpdatedLabel() {
+    const el = document.getElementById("settingsUpdatedAt");
+    if (!el) return;
+    if (!settings.updatedAt) {
+      el.textContent = "Réglages jamais modifiés";
+      return;
+    }
+    const d = new Date(settings.updatedAt);
+    const time = d.toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit" });
+    if (todayKey(d) === todayKey()) {
+      el.textContent = `Réglages mis à jour aujourd'hui à ${time}`;
+    } else {
+      const date = d.toLocaleDateString("fr-BE", { day: "numeric", month: "short" });
+      el.textContent = `Réglages mis à jour le ${date} à ${time}`;
+    }
+  }
+
+  function getItemLabel(item) {
+    return settings.itemOverrides[item.id] || item.text;
+  }
+
+  function isItemHidden(id) {
+    return settings.hiddenItems.includes(id);
+  }
 
   function getVisibleCategories() {
     return settings.categoryOrder
@@ -1223,8 +1292,21 @@ const CHECKLIST_CATEGORIES = [
   }
 
   function getTotalItems() {
-    const n = getVisibleCategories().reduce((sum, c) => sum + c.items.length, 0);
+    const n = getVisibleCategories().reduce(
+      (sum, c) => sum + c.items.filter((i) => !isItemHidden(i.id)).length,
+      0
+    );
     return n || 1; // évite une division par zéro si tout est masqué
+  }
+
+  function getCountableItemIds() {
+    const ids = new Set();
+    getVisibleCategories().forEach((c) => {
+      c.items.forEach((i) => {
+        if (!isItemHidden(i.id)) ids.add(i.id);
+      });
+    });
+    return ids;
   }
 
   function ensureFreshDay() {
@@ -1279,6 +1361,7 @@ const CHECKLIST_CATEGORIES = [
     document.getElementById("settingsBtn").addEventListener("click", () => {
       modal.hidden = false;
       refreshThemeButtons();
+      refreshSettingsUpdatedLabel();
     });
     document.getElementById("closeSettings").addEventListener("click", () => {
       modal.hidden = true;
@@ -1290,7 +1373,7 @@ const CHECKLIST_CATEGORIES = [
     document.querySelectorAll(".theme-swatch").forEach((btn) => {
       btn.addEventListener("click", () => {
         settings.theme = btn.dataset.theme;
-        writeJSON(STORAGE_SETTINGS, settings);
+        saveSettings();
         applySettings();
         refreshThemeButtons();
       });
@@ -1300,7 +1383,7 @@ const CHECKLIST_CATEGORIES = [
     animToggle.checked = settings.animations;
     animToggle.addEventListener("change", () => {
       settings.animations = animToggle.checked;
-      writeJSON(STORAGE_SETTINGS, settings);
+      saveSettings();
       applySettings();
     });
 
@@ -1309,7 +1392,7 @@ const CHECKLIST_CATEGORIES = [
     reminderToggle.addEventListener("change", () => {
       const wantsReminder = reminderToggle.checked;
       settings.eveningReminder = wantsReminder;
-      writeJSON(STORAGE_SETTINGS, settings);
+      saveSettings();
 
       window.OneSignalDeferred = window.OneSignalDeferred || [];
       window.OneSignalDeferred.push(async function (OneSignal) {
@@ -1318,7 +1401,7 @@ const CHECKLIST_CATEGORIES = [
           if (!OneSignal.Notifications.permission) {
             reminderToggle.checked = false;
             settings.eveningReminder = false;
-            writeJSON(STORAGE_SETTINGS, settings);
+            saveSettings();
             showToast("Notifications refusées par le navigateur");
             return;
           }
@@ -1382,7 +1465,7 @@ const CHECKLIST_CATEGORIES = [
     if (target < 0 || target >= settings.categoryOrder.length) return;
     const order = settings.categoryOrder;
     [order[index], order[target]] = [order[target], order[index]];
-    writeJSON(STORAGE_SETTINGS, settings);
+    saveSettings();
     renderCategoryManager();
     renderChecklist();
     updateRing();
@@ -1394,7 +1477,7 @@ const CHECKLIST_CATEGORIES = [
     const pos = hidden.indexOf(id);
     if (pos === -1) hidden.push(id);
     else hidden.splice(pos, 1);
-    writeJSON(STORAGE_SETTINGS, settings);
+    saveSettings();
     renderCategoryManager();
     renderChecklist();
     updateRing();
@@ -1427,6 +1510,7 @@ const CHECKLIST_CATEGORIES = [
   function createItemElement(item) {
     const wrap = document.createElement("div");
     wrap.className = "item-wrap";
+    if (editMode && isItemHidden(item.id)) wrap.classList.add("is-item-hidden");
 
     const row = document.createElement("div");
     row.className = "item-row";
@@ -1451,7 +1535,7 @@ const CHECKLIST_CATEGORIES = [
 
     const text = document.createElement("span");
     text.className = "item__text";
-    text.textContent = item.text;
+    text.textContent = getItemLabel(item);
 
     label.appendChild(box);
     label.appendChild(mark);
@@ -1464,7 +1548,7 @@ const CHECKLIST_CATEGORIES = [
       infoBtn.type = "button";
       infoBtn.className = "info-btn";
       infoBtn.textContent = "i";
-      infoBtn.setAttribute("aria-label", "Plus d'info sur : " + item.text);
+      infoBtn.setAttribute("aria-label", "Plus d'info sur : " + getItemLabel(item));
       row.appendChild(infoBtn);
 
       infoPanel = document.createElement("div");
@@ -1477,6 +1561,24 @@ const CHECKLIST_CATEGORIES = [
       });
     }
 
+    if (editMode) {
+      const renameBtn = document.createElement("button");
+      renameBtn.type = "button";
+      renameBtn.className = "info-btn";
+      renameBtn.textContent = "✎";
+      renameBtn.setAttribute("aria-label", "Renommer");
+      renameBtn.addEventListener("click", () => startRename(item, text));
+      row.appendChild(renameBtn);
+
+      const hideBtn = document.createElement("button");
+      hideBtn.type = "button";
+      hideBtn.className = "info-btn";
+      hideBtn.textContent = isItemHidden(item.id) ? "🚫" : "👁";
+      hideBtn.setAttribute("aria-label", isItemHidden(item.id) ? "Réafficher" : "Masquer");
+      hideBtn.addEventListener("click", () => toggleItemHidden(item.id));
+      row.appendChild(hideBtn);
+    }
+
     wrap.appendChild(row);
     if (infoPanel) wrap.appendChild(infoPanel);
 
@@ -1485,6 +1587,47 @@ const CHECKLIST_CATEGORIES = [
     }
 
     return wrap;
+  }
+
+  function startRename(item, textEl) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "item__rename-input";
+    input.value = getItemLabel(item);
+    textEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    let committed = false;
+    function commit() {
+      if (committed) return;
+      committed = true;
+      const val = input.value.trim();
+      if (val && val !== item.text) settings.itemOverrides[item.id] = val;
+      else delete settings.itemOverrides[item.id];
+      saveSettings();
+      renderChecklist();
+      updateRing();
+      updateHero();
+    }
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") input.blur();
+      if (e.key === "Escape") {
+        committed = true;
+        renderChecklist();
+      }
+    });
+    input.addEventListener("blur", commit);
+  }
+
+  function toggleItemHidden(id) {
+    const pos = settings.hiddenItems.indexOf(id);
+    if (pos === -1) settings.hiddenItems.push(id);
+    else settings.hiddenItems.splice(pos, 1);
+    saveSettings();
+    renderChecklist();
+    updateRing();
+    updateHero();
   }
 
   function createWaterControls(item, checkboxEl) {
@@ -1572,6 +1715,8 @@ const CHECKLIST_CATEGORIES = [
     return waterBlock;
   }
 
+  let editMode = false;
+
   function renderChecklist() {
     const root = document.getElementById("checklistRoot");
     root.innerHTML = "";
@@ -1586,7 +1731,13 @@ const CHECKLIST_CATEGORIES = [
       return;
     }
 
+    let anyRendered = false;
+
     visible.forEach((category) => {
+      const itemsToShow = category.items.filter((item) => editMode || !isItemHidden(item.id));
+      if (itemsToShow.length === 0) return;
+      anyRendered = true;
+
       const section = document.createElement("section");
       section.className = "category";
 
@@ -1598,17 +1749,25 @@ const CHECKLIST_CATEGORIES = [
       const list = document.createElement("div");
       list.className = "category__list";
 
-      category.items.forEach((item) => {
+      itemsToShow.forEach((item) => {
         list.appendChild(createItemElement(item));
       });
 
       section.appendChild(list);
       root.appendChild(section);
     });
+
+    if (!anyRendered) {
+      const empty = document.createElement("p");
+      empty.className = "backup__text";
+      empty.textContent = "Tous les objectifs sont masqués — active le mode édition pour en réafficher.";
+      root.appendChild(empty);
+    }
   }
 
   function todayCount() {
-    return Object.keys(current.checked).length;
+    const countable = getCountableItemIds();
+    return Object.keys(current.checked).filter((id) => countable.has(id)).length;
   }
 
   function todayPercent() {
@@ -1673,7 +1832,21 @@ const CHECKLIST_CATEGORIES = [
       tabToday.setAttribute("aria-selected", "false");
       viewToday.hidden = true;
       viewHistory.hidden = false;
+      if (editMode) {
+        editMode = false;
+        const btn = document.getElementById("editModeBtn");
+        if (btn) btn.textContent = "✎ Modifier la liste";
+      }
       renderHistory();
+    });
+  }
+
+  function setupEditModeToggle() {
+    const btn = document.getElementById("editModeBtn");
+    btn.addEventListener("click", () => {
+      editMode = !editMode;
+      btn.textContent = editMode ? "✓ Terminé" : "✎ Modifier la liste";
+      renderChecklist();
     });
   }
 
@@ -1937,7 +2110,9 @@ const CHECKLIST_CATEGORIES = [
             settings.categoryOrder = CHECKLIST_CATEGORIES.map((c) => c.id);
           }
           if (!settings.hiddenCategories) settings.hiddenCategories = [];
-          writeJSON(STORAGE_SETTINGS, settings);
+          if (!settings.hiddenItems) settings.hiddenItems = [];
+          if (!settings.itemOverrides) settings.itemOverrides = {};
+          saveSettings();
           applySettings();
           refreshThemeButtons();
           renderCategoryManager();
@@ -1972,6 +2147,7 @@ const CHECKLIST_CATEGORIES = [
     updateRing();
     updateHero();
     setupTabs();
+    setupEditModeToggle();
     setupCalendarNav();
     setupBackup();
     setupSettings();
