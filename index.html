@@ -939,6 +939,17 @@ body.no-anim, body.no-anim * {
   transform: translate(-50%, 0);
 }
 
+/* ---------- Version ---------- */
+
+.app-version {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-dim);
+  opacity: 0.6;
+  margin-top: 36px;
+  letter-spacing: 0.02em;
+}
+
 </style>
 </head>
 <body>
@@ -1019,6 +1030,8 @@ body.no-anim, body.no-anim * {
       </div>
     </section>
   </main>
+
+  <footer class="app-version" id="appVersion">—</footer>
 
 </div>
 
@@ -1193,6 +1206,7 @@ const CHECKLIST_CATEGORIES = [
   const STORAGE_SETTINGS = "rituel_settings_v1";
 
   const PIE_COLORS = ["#7a8c6f", "#d8a24a", "#6f87ae", "#b06a72", "#5f9b95", "#9a9a5f", "#8f6f9b"];
+  const APP_VERSION = "v6 · build 14/09/2026 18:55";
 
   // ---------- Utils ----------
 
@@ -2140,6 +2154,7 @@ const CHECKLIST_CATEGORIES = [
   // ---------- Init ----------
 
   function init() {
+    document.getElementById("appVersion").textContent = APP_VERSION;
     applySettings();
     ensureFreshDay();
     updateDateLabel();
