@@ -24,6 +24,8 @@
   OneSignalDeferred.push(async function (OneSignal) {
     await OneSignal.init({
       appId: "ac35d143-2b27-4e5a-8dd5-58d97cbc7ca0",
+      serviceWorkerPath: "push/onesignal/OneSignalSDKWorker.js",
+      serviceWorkerParam: { scope: "/push/onesignal/" },
     });
   });
 </script>
@@ -1238,7 +1240,7 @@ const CHECKLIST_CATEGORIES = [
   const STORAGE_SETTINGS = "rituel_settings_v1";
 
   const PIE_COLORS = ["#7a8c6f", "#d8a24a", "#6f87ae", "#b06a72", "#5f9b95", "#9a9a5f", "#8f6f9b"];
-  const APP_VERSION = "v7 · build 14/09/2026 19:54";
+  const APP_VERSION = "v8 · build 14/09/2026 22:24";
 
   // ---------- Utils ----------
 
