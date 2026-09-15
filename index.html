@@ -24,8 +24,7 @@
   OneSignalDeferred.push(async function (OneSignal) {
     await OneSignal.init({
       appId: "ac35d143-2b27-4e5a-8dd5-58d97cbc7ca0",
-      serviceWorkerPath: "push/onesignal/OneSignalSDKWorker.js",
-      serviceWorkerParam: { scope: "/push/onesignal/" },
+      serviceWorkerPath: "sw.js",
     });
   });
 </script>
@@ -280,7 +279,8 @@ body.no-anim, body.no-anim * {
 
 .list-toolbar {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: 10px;
   margin-bottom: 14px;
 }
 
@@ -759,6 +759,16 @@ body.no-anim, body.no-anim * {
   border-color: var(--sage);
 }
 
+.btn--active {
+  background: var(--sage);
+  border-color: var(--sage);
+  color: var(--bg);
+}
+
+.btn--active:hover {
+  border-color: var(--sage);
+}
+
 /* ---------- Modale Réglages ---------- */
 
 .modal-overlay {
@@ -975,6 +985,93 @@ body.no-anim, body.no-anim * {
 
 /* ---------- Version ---------- */
 
+/* ---------- Note du jour ---------- */
+
+.note-section {
+  margin-top: 8px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.note-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-family: var(--font-body);
+  font-size: 14px;
+  padding: 4px 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.note-toggle:hover {
+  color: var(--text);
+}
+
+.note-indicator {
+  color: var(--amber);
+  font-size: 9px;
+}
+
+.note-body {
+  margin-top: 10px;
+}
+
+.note-textarea {
+  width: 100%;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+.note-textarea:focus {
+  border-color: var(--sage);
+  outline: none;
+}
+
+/* ---------- Objectifs les plus ratés ---------- */
+
+.worst-items {
+  margin-bottom: 32px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--line);
+}
+
+.worst-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13.5px;
+}
+
+.worst-item-row:last-child {
+  border-bottom: none;
+}
+
+.worst-item-label {
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+  padding-right: 12px;
+}
+
+.worst-item-pct {
+  color: var(--text-dim);
+  font-weight: 500;
+  flex: none;
+}
+
 .app-version {
   text-align: center;
   font-size: 11px;
@@ -1011,9 +1108,20 @@ body.no-anim, body.no-anim * {
 
   <main id="viewToday" class="view">
     <div class="list-toolbar">
+      <button class="btn btn--ghost" id="pauseModeBtn">⏸ Jour pause</button>
       <button class="btn btn--ghost" id="editModeBtn">✎ Modifier la liste</button>
     </div>
     <div id="checklistRoot"></div>
+
+    <section class="note-section">
+      <button class="note-toggle" id="noteToggle" type="button" aria-expanded="false">
+        <span>📝 Note du jour</span>
+        <span class="note-indicator" id="noteIndicator" hidden>●</span>
+      </button>
+      <div class="note-body" id="noteBody" hidden>
+        <textarea id="dayNote" class="note-textarea" placeholder="Une remarque sur ta journée..." rows="3"></textarea>
+      </div>
+    </section>
   </main>
 
   <main id="viewHistory" class="view" hidden>
@@ -1044,6 +1152,11 @@ body.no-anim, body.no-anim * {
         <div class="piechart" id="pieChart"></div>
         <div class="pielegend" id="pieLegend"></div>
       </div>
+    </section>
+
+    <section class="worst-items" id="worstItemsSection" hidden>
+      <h2 class="piesection__title">Objectifs les plus ratés</h2>
+      <div id="worstItemsList"></div>
     </section>
 
     <section class="calendar">
@@ -1095,6 +1208,27 @@ body.no-anim, body.no-anim * {
         <span class="switch__track"></span>
         <span class="switch__thumb"></span>
       </label>
+    </div>
+
+    <div class="modal__section toggle-row">
+      <span class="modal__label">Retour haptique</span>
+      <label class="switch">
+        <input type="checkbox" id="hapticToggle" checked>
+        <span class="switch__track"></span>
+        <span class="switch__thumb"></span>
+      </label>
+    </div>
+
+    <div class="modal__section">
+      <div class="toggle-row">
+        <span class="modal__label">Vue focus</span>
+        <label class="switch">
+          <input type="checkbox" id="focusToggle">
+          <span class="switch__track"></span>
+          <span class="switch__thumb"></span>
+        </label>
+      </div>
+      <p class="modal__note">Masque automatiquement les catégories déjà entièrement cochées.</p>
     </div>
 
     <div class="modal__section">
@@ -1240,7 +1374,7 @@ const CHECKLIST_CATEGORIES = [
   const STORAGE_SETTINGS = "rituel_settings_v1";
 
   const PIE_COLORS = ["#7a8c6f", "#d8a24a", "#6f87ae", "#b06a72", "#5f9b95", "#9a9a5f", "#8f6f9b"];
-  const APP_VERSION = "v8 · build 14/09/2026 22:24";
+  const APP_VERSION = "v10 · build 15/09/2026 22:02";
 
   // ---------- Utils ----------
 
@@ -1293,8 +1427,12 @@ const CHECKLIST_CATEGORIES = [
     hiddenItems: [],
     itemOverrides: {},
     customItems: [],
+    haptics: true,
+    focusMode: false,
     updatedAt: null,
   });
+  if (typeof settings.haptics !== "boolean") settings.haptics = true;
+  if (typeof settings.focusMode !== "boolean") settings.focusMode = false;
   if (!settings.categoryOrder || settings.categoryOrder.length !== CHECKLIST_CATEGORIES.length) {
     settings.categoryOrder = CHECKLIST_CATEGORIES.map((c) => c.id);
   }
@@ -1376,13 +1514,17 @@ const CHECKLIST_CATEGORIES = [
           total: getTotalItems(),
           done,
           water: current.water || 0,
+          paused: !!current.paused,
+          note: current.note || "",
         };
         writeJSON(STORAGE_HISTORY, history);
       }
-      current = { date: key, checked: {}, water: 0, savedAt: null };
+      current = { date: key, checked: {}, water: 0, paused: false, note: "", savedAt: null };
       writeJSON(STORAGE_CURRENT, current);
     }
     if (typeof current.water !== "number") current.water = 0;
+    if (typeof current.paused !== "boolean") current.paused = false;
+    if (typeof current.note !== "string") current.note = "";
   }
 
   function saveCurrent() {
@@ -1394,6 +1536,8 @@ const CHECKLIST_CATEGORIES = [
       total: getTotalItems(),
       done,
       water: current.water || 0,
+      paused: !!current.paused,
+      note: current.note || "",
       savedAt: current.savedAt,
     };
     writeJSON(STORAGE_HISTORY, history);
@@ -1442,6 +1586,22 @@ const CHECKLIST_CATEGORIES = [
       settings.animations = animToggle.checked;
       saveSettings();
       applySettings();
+    });
+
+    const hapticToggle = document.getElementById("hapticToggle");
+    hapticToggle.checked = settings.haptics;
+    hapticToggle.addEventListener("change", () => {
+      settings.haptics = hapticToggle.checked;
+      saveSettings();
+      if (settings.haptics) triggerHaptic();
+    });
+
+    const focusToggle = document.getElementById("focusToggle");
+    focusToggle.checked = settings.focusMode;
+    focusToggle.addEventListener("change", () => {
+      settings.focusMode = focusToggle.checked;
+      saveSettings();
+      renderChecklist();
     });
 
     const reminderToggle = document.getElementById("reminderToggle");
@@ -1582,6 +1742,7 @@ const CHECKLIST_CATEGORIES = [
     box.addEventListener("change", () => {
       if (box.checked) current.checked[item.id] = true;
       else delete current.checked[item.id];
+      triggerHaptic();
       saveCurrent();
       updateRing();
       updateHero();
@@ -1825,6 +1986,7 @@ const CHECKLIST_CATEGORIES = [
       if (ml >= item.goalMinMl && !current.checked[item.id]) {
         current.checked[item.id] = true;
         checkboxEl.checked = true;
+        triggerHaptic();
         updateRing();
         updateHero();
       }
@@ -1871,6 +2033,10 @@ const CHECKLIST_CATEGORIES = [
       const merged = mergedItemsForCategory(category);
       const itemsToShow = merged.filter((item) => editMode || !isItemHidden(item.id));
       if (!editMode && itemsToShow.length === 0) return;
+
+      const allChecked = itemsToShow.length > 0 && itemsToShow.every((item) => current.checked[item.id]);
+      if (settings.focusMode && !editMode && allChecked) return;
+
       anyRendered = true;
 
       const section = document.createElement("section");
@@ -1899,7 +2065,11 @@ const CHECKLIST_CATEGORIES = [
     if (!anyRendered) {
       const empty = document.createElement("p");
       empty.className = "backup__text";
-      empty.textContent = "Tous les objectifs sont masqués — active le mode édition pour en réafficher.";
+      if (settings.focusMode && todayPercent() >= 100) {
+        empty.textContent = "🎉 Journée complète — rien à faire de plus aujourd'hui.";
+      } else {
+        empty.textContent = "Tous les objectifs sont masqués — active le mode édition pour en réafficher.";
+      }
       root.appendChild(empty);
     }
   }
@@ -1907,6 +2077,37 @@ const CHECKLIST_CATEGORIES = [
   function todayCount() {
     const countable = getCountableItemIds();
     return Object.keys(current.checked).filter((id) => countable.has(id)).length;
+  }
+
+  function renderNote() {
+    const toggle = document.getElementById("noteToggle");
+    const body = document.getElementById("noteBody");
+    const textarea = document.getElementById("dayNote");
+    const indicator = document.getElementById("noteIndicator");
+
+    textarea.value = current.note || "";
+    const hasNote = !!(current.note && current.note.trim());
+    indicator.hidden = !hasNote;
+    body.hidden = !hasNote; // replié par défaut, sauf s'il y a déjà une note
+    toggle.setAttribute("aria-expanded", hasNote ? "true" : "false");
+  }
+
+  function setupNote() {
+    const toggle = document.getElementById("noteToggle");
+    const body = document.getElementById("noteBody");
+    const textarea = document.getElementById("dayNote");
+
+    toggle.addEventListener("click", () => {
+      body.hidden = !body.hidden;
+      toggle.setAttribute("aria-expanded", body.hidden ? "false" : "true");
+      if (!body.hidden) textarea.focus();
+    });
+
+    textarea.addEventListener("blur", () => {
+      current.note = textarea.value;
+      saveCurrent();
+      document.getElementById("noteIndicator").hidden = !current.note.trim();
+    });
   }
 
   function todayPercent() {
@@ -1935,9 +2136,14 @@ const CHECKLIST_CATEGORIES = [
   ];
 
   function updateHero() {
+    const heroEl = document.getElementById("heroMessage");
+    if (current.paused) {
+      heroEl.textContent = "Jour en pause — ne compte pas dans tes stats.";
+      return;
+    }
     const pct = todayPercent();
     const match = HERO_MESSAGES.find((m) => pct >= m.min && pct <= m.max);
-    document.getElementById("heroMessage").textContent = match ? match.text : "Ta journée commence ici.";
+    heroEl.textContent = match ? match.text : "Ta journée commence ici.";
   }
 
   function updateDateLabel() {
@@ -1989,6 +2195,27 @@ const CHECKLIST_CATEGORIES = [
     });
   }
 
+  function triggerHaptic() {
+    if (!settings.haptics) return;
+    if (navigator.vibrate) navigator.vibrate(15);
+  }
+
+  function setupPauseToggle() {
+    const btn = document.getElementById("pauseModeBtn");
+    refreshPauseButton(btn);
+    btn.addEventListener("click", () => {
+      current.paused = !current.paused;
+      saveCurrent();
+      refreshPauseButton(btn);
+      updateHero();
+    });
+  }
+
+  function refreshPauseButton(btn) {
+    btn.textContent = current.paused ? "▶️ Reprendre le jour" : "⏸ Jour pause";
+    btn.classList.toggle("btn--active", current.paused);
+  }
+
   // ---------- History / Stats / Calendar ----------
 
   let calendarCursor = new Date();
@@ -2004,7 +2231,12 @@ const CHECKLIST_CATEGORIES = [
     let cursor = new Date();
     while (true) {
       const key = todayKey(cursor);
-      const pct = dayPercent(key);
+      const entry = history[key];
+      if (entry && entry.paused) {
+        cursor.setDate(cursor.getDate() - 1);
+        continue; // jour en pause : transparent, ne casse ni n'allonge le streak
+      }
+      const pct = entry ? Math.round((entry.done / entry.total) * 100) : null;
       if (pct === 100) {
         streak++;
         cursor.setDate(cursor.getDate() - 1);
@@ -2016,33 +2248,36 @@ const CHECKLIST_CATEGORIES = [
   }
 
   function computeBestStreakEver() {
-    const keys = Object.keys(history).sort();
+    const keys = Object.keys(history);
+    if (keys.length === 0) return 0;
+    const sorted = keys.slice().sort();
+    const cursor = new Date(sorted[0]);
+    const end = new Date(sorted[sorted.length - 1]);
     let best = 0;
     let chain = 0;
-    let prevKey = null;
-    keys.forEach((key) => {
-      const pct = dayPercent(key);
+    while (cursor <= end) {
+      const key = todayKey(cursor);
+      const entry = history[key];
+      if (entry && entry.paused) {
+        cursor.setDate(cursor.getDate() + 1);
+        continue; // transparent
+      }
+      const pct = entry ? Math.round((entry.done / entry.total) * 100) : null;
       if (pct === 100) {
-        if (prevKey) {
-          const diffDays = Math.round((new Date(key) - new Date(prevKey)) / 86400000);
-          chain = diffDays === 1 ? chain + 1 : 1;
-        } else {
-          chain = 1;
-        }
+        chain++;
         best = Math.max(best, chain);
-        prevKey = key;
       } else {
         chain = 0;
-        prevKey = null;
       }
-    });
+      cursor.setDate(cursor.getDate() + 1);
+    }
     return best;
   }
 
   function computeMonthAverage(year, month) {
     const days = Object.keys(history).filter((k) => {
       const [y, m] = k.split("-").map(Number);
-      return y === year && m === month + 1;
+      return y === year && m === month + 1 && !history[k].paused;
     });
     if (days.length === 0) return 0;
     const sum = days.reduce((acc, k) => acc + dayPercent(k), 0);
@@ -2050,7 +2285,9 @@ const CHECKLIST_CATEGORIES = [
   }
 
   function computeBestDay() {
-    const values = Object.keys(history).map(dayPercent);
+    const values = Object.keys(history)
+      .filter((k) => !history[k].paused)
+      .map(dayPercent);
     if (values.length === 0) return 0;
     return Math.max(...values);
   }
@@ -2059,6 +2296,7 @@ const CHECKLIST_CATEGORIES = [
     const counts = {};
     CHECKLIST_CATEGORIES.forEach((cat) => (counts[cat.id] = 0));
     Object.values(history).forEach((entry) => {
+      if (entry.paused) return;
       const checked = entry.checked || {};
       CHECKLIST_CATEGORIES.forEach((cat) => {
         mergedItemsForCategory(cat).forEach((item) => {
@@ -2072,6 +2310,56 @@ const CHECKLIST_CATEGORIES = [
       count: counts[cat.id],
       color: PIE_COLORS[i % PIE_COLORS.length],
     }));
+  }
+
+  function computeWorstItems() {
+    const days = Object.keys(history).filter((k) => !history[k].paused);
+    if (days.length === 0) return [];
+
+    const allItems = [];
+    CHECKLIST_CATEGORIES.forEach((cat) => {
+      mergedItemsForCategory(cat).forEach((item) => allItems.push(item));
+    });
+
+    return allItems
+      .map((item) => {
+        const checkedCount = days.filter((k) => history[k].checked && history[k].checked[item.id]).length;
+        return {
+          id: item.id,
+          label: getItemLabel(item),
+          rate: Math.round((checkedCount / days.length) * 100),
+        };
+      })
+      .filter((d) => d.rate < 100)
+      .sort((a, b) => a.rate - b.rate)
+      .slice(0, 5);
+  }
+
+  function renderWorstItems() {
+    const root = document.getElementById("worstItemsList");
+    const section = document.getElementById("worstItemsSection");
+    const worst = computeWorstItems();
+    root.innerHTML = "";
+
+    if (worst.length === 0) {
+      section.hidden = true;
+      return;
+    }
+    section.hidden = false;
+
+    worst.forEach((d) => {
+      const row = document.createElement("div");
+      row.className = "worst-item-row";
+      const label = document.createElement("span");
+      label.className = "worst-item-label";
+      label.textContent = d.label;
+      const pct = document.createElement("span");
+      pct.className = "worst-item-pct";
+      pct.textContent = `${d.rate}%`;
+      row.appendChild(label);
+      row.appendChild(pct);
+      root.appendChild(row);
+    });
   }
 
   function renderPieChart() {
@@ -2140,6 +2428,7 @@ const CHECKLIST_CATEGORIES = [
     document.getElementById("statBest").textContent = `${computeBestDay()}%`;
     renderLastSaved();
     renderPieChart();
+    renderWorstItems();
   }
 
   function renderCalendar() {
@@ -2174,14 +2463,18 @@ const CHECKLIST_CATEGORIES = [
     for (let day = 1; day <= daysInMonth; day++) {
       const dateObj = new Date(year, month, day);
       const key = todayKey(dateObj);
-      const pct = dayPercent(key);
+      const entry = history[key];
+      const isPaused = !!(entry && entry.paused);
+      const pct = isPaused ? null : dayPercent(key);
 
       const cell = document.createElement("div");
       cell.className = "calendar__cell";
       if (key === todayStr) cell.classList.add("calendar__cell--today");
 
       let intensity = "none";
-      if (pct !== null) {
+      if (isPaused) {
+        intensity = "paused";
+      } else if (pct !== null) {
         if (pct >= 100) intensity = "full";
         else if (pct >= 70) intensity = "high";
         else if (pct >= 40) intensity = "mid";
@@ -2189,11 +2482,11 @@ const CHECKLIST_CATEGORIES = [
         else intensity = "zero";
       }
       cell.dataset.intensity = intensity;
-      cell.title = pct !== null ? `${key} — ${pct}%` : key;
+      cell.title = isPaused ? `${key} — en pause` : pct !== null ? `${key} — ${pct}%` : key;
 
       const num = document.createElement("span");
       num.className = "calendar__num";
-      num.textContent = day;
+      num.textContent = isPaused ? "⏸" : day;
       cell.appendChild(num);
 
       grid.appendChild(cell);
@@ -2263,10 +2556,14 @@ const CHECKLIST_CATEGORIES = [
         if (data.current && data.current.date === todayKey()) {
           current = data.current;
           if (typeof current.water !== "number") current.water = 0;
+          if (typeof current.paused !== "boolean") current.paused = false;
+          if (typeof current.note !== "string") current.note = "";
           writeJSON(STORAGE_CURRENT, current);
           renderChecklist();
           updateRing();
           updateHero();
+          renderNote();
+          refreshPauseButton(document.getElementById("pauseModeBtn"));
         }
         renderHistory();
         showToast("Données importées");
@@ -2289,6 +2586,9 @@ const CHECKLIST_CATEGORIES = [
     updateHero();
     setupTabs();
     setupEditModeToggle();
+    setupPauseToggle();
+    renderNote();
+    setupNote();
     setupCalendarNav();
     setupBackup();
     setupSettings();
@@ -2301,6 +2601,8 @@ const CHECKLIST_CATEGORIES = [
         updateRing();
         updateHero();
         updateDateLabel();
+        renderNote();
+        refreshPauseButton(document.getElementById("pauseModeBtn"));
       }
     }, 60 * 1000);
 
