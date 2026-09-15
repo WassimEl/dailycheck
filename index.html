@@ -680,6 +680,14 @@ body.no-anim, body.no-anim * {
   border: 1px solid var(--line);
 }
 
+.calendar__cell--clickable {
+  cursor: pointer;
+}
+
+.calendar__cell--clickable:hover {
+  border-color: var(--sage);
+}
+
 .calendar__cell--empty {
   background: none;
   border: none;
@@ -717,6 +725,16 @@ body.no-anim, body.no-anim * {
 .calendar__cell[data-intensity="full"] .calendar__num,
 .calendar__cell[data-intensity="high"] .calendar__num {
   color: var(--bg);
+}
+
+.calendar__cell[data-intensity="paused"] {
+  background: var(--bg-raised);
+  border-style: dashed;
+}
+
+.calendar__cell[data-intensity="paused"] .calendar__num {
+  color: var(--text-dim);
+  font-size: 13px;
 }
 
 /* ---------- Backup ---------- */
@@ -792,6 +810,86 @@ body.no-anim, body.no-anim * {
   border-radius: 14px;
   padding: 24px;
   width: min(340px, 100%);
+}
+
+.modal--wide {
+  width: min(420px, 100%);
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.day-detail__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.day-detail__head .modal__title {
+  margin: 0;
+}
+
+.day-detail__pct {
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--sage);
+  flex: none;
+}
+
+.day-detail__paused-badge {
+  font-size: 13px;
+  color: var(--amber);
+  margin: 8px 0 0;
+}
+
+.day-detail__water,
+.day-detail__note {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+
+.day-detail__category {
+  margin-top: 22px;
+}
+
+.day-detail__category-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  margin: 0 0 8px;
+  color: var(--text);
+}
+
+.day-detail__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.day-detail__item.is-checked {
+  color: var(--text);
+}
+
+.day-detail__mark {
+  flex: none;
+  width: 18px;
+  text-align: center;
+  color: var(--line);
+}
+
+.day-detail__item.is-checked .day-detail__mark {
+  color: var(--sage);
+}
+
+.day-detail__empty {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 22px;
 }
 
 .modal__title {
@@ -949,6 +1047,7 @@ body.no-anim, body.no-anim * {
 
 .modal__close {
   width: 100%;
+  margin-top: 24px;
   padding: 11px;
   border-radius: 8px;
   border: none;
@@ -1254,6 +1353,23 @@ body.no-anim, body.no-anim * {
   </div>
 </div>
 
+<div class="modal-overlay" id="dayDetailModal" hidden>
+  <div class="modal modal--wide">
+    <div class="day-detail__head">
+      <h2 class="modal__title" id="dayDetailDate">—</h2>
+      <span class="day-detail__pct" id="dayDetailPct">—</span>
+    </div>
+
+    <p class="day-detail__paused-badge" id="dayDetailPaused" hidden>⏸ Jour en pause ce jour-là</p>
+    <p class="day-detail__water" id="dayDetailWater" hidden></p>
+    <p class="day-detail__note" id="dayDetailNote" hidden></p>
+
+    <div id="dayDetailCategories"></div>
+
+    <button class="modal__close" id="closeDayDetail">Fermer</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1374,7 +1490,7 @@ const CHECKLIST_CATEGORIES = [
   const STORAGE_SETTINGS = "rituel_settings_v1";
 
   const PIE_COLORS = ["#7a8c6f", "#d8a24a", "#6f87ae", "#b06a72", "#5f9b95", "#9a9a5f", "#8f6f9b"];
-  const APP_VERSION = "v10 · build 15/09/2026 22:02";
+  const APP_VERSION = "v12 · build 15/09/2026 22:27";
 
   // ---------- Utils ----------
 
@@ -2489,6 +2605,11 @@ const CHECKLIST_CATEGORIES = [
       num.textContent = isPaused ? "⏸" : day;
       cell.appendChild(num);
 
+      if (entry) {
+        cell.classList.add("calendar__cell--clickable");
+        cell.addEventListener("click", () => openDayDetail(key));
+      }
+
       grid.appendChild(cell);
     }
   }
@@ -2506,6 +2627,108 @@ const CHECKLIST_CATEGORIES = [
     document.getElementById("calNext").addEventListener("click", () => {
       calendarCursor.setMonth(calendarCursor.getMonth() + 1);
       renderHistory();
+    });
+  }
+
+  function openDayDetail(key) {
+    const entry = history[key];
+    if (!entry) return;
+
+    const dateObj = new Date(key + "T00:00:00");
+    const formatted = dateObj.toLocaleDateString("fr-BE", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    document.getElementById("dayDetailDate").textContent =
+      formatted.charAt(0).toUpperCase() + formatted.slice(1);
+
+    const pausedEl = document.getElementById("dayDetailPaused");
+    pausedEl.hidden = !entry.paused;
+
+    const pctEl = document.getElementById("dayDetailPct");
+    if (entry.paused) {
+      pctEl.textContent = "En pause";
+    } else {
+      const pct = Math.round((entry.done / entry.total) * 100);
+      pctEl.textContent = `${pct}%`;
+    }
+
+    const waterEl = document.getElementById("dayDetailWater");
+    if (entry.water && entry.water > 0) {
+      waterEl.hidden = false;
+      waterEl.textContent = `💧 ${(entry.water / 1000).toFixed(1)}L bus ce jour-là`;
+    } else {
+      waterEl.hidden = true;
+    }
+
+    const noteEl = document.getElementById("dayDetailNote");
+    if (entry.note && entry.note.trim()) {
+      noteEl.hidden = false;
+      noteEl.textContent = `📝 ${entry.note}`;
+    } else {
+      noteEl.hidden = true;
+    }
+
+    const root = document.getElementById("dayDetailCategories");
+    root.innerHTML = "";
+    const checked = entry.checked || {};
+
+    let anyChecked = false;
+
+    settings.categoryOrder
+      .map((id) => CHECKLIST_CATEGORIES.find((c) => c.id === id))
+      .filter(Boolean)
+      .forEach((category) => {
+        const checkedItems = mergedItemsForCategory(category).filter((item) => checked[item.id]);
+        if (checkedItems.length === 0) return;
+        anyChecked = true;
+
+        const section = document.createElement("div");
+        section.className = "day-detail__category";
+
+        const heading = document.createElement("h3");
+        heading.className = "day-detail__category-title";
+        heading.textContent = category.label;
+        section.appendChild(heading);
+
+        checkedItems.forEach((item) => {
+          const row = document.createElement("div");
+          row.className = "day-detail__item is-checked";
+
+          const mark = document.createElement("span");
+          mark.className = "day-detail__mark";
+          mark.textContent = "✓";
+
+          const label = document.createElement("span");
+          label.textContent = getItemLabel(item);
+
+          row.appendChild(mark);
+          row.appendChild(label);
+          section.appendChild(row);
+        });
+
+        root.appendChild(section);
+      });
+
+    if (!anyChecked) {
+      const empty = document.createElement("p");
+      empty.className = "day-detail__empty";
+      empty.textContent = "Rien n'a été coché ce jour-là.";
+      root.appendChild(empty);
+    }
+
+    document.getElementById("dayDetailModal").hidden = false;
+  }
+
+  function setupDayDetail() {
+    const modal = document.getElementById("dayDetailModal");
+    document.getElementById("closeDayDetail").addEventListener("click", () => {
+      modal.hidden = true;
+    });
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) modal.hidden = true;
     });
   }
 
@@ -2590,6 +2813,7 @@ const CHECKLIST_CATEGORIES = [
     renderNote();
     setupNote();
     setupCalendarNav();
+    setupDayDetail();
     setupBackup();
     setupSettings();
 
